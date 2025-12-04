@@ -25,34 +25,34 @@ namespace DevOpsMetrics.Core.DataAccess
                 JArray list = await daTableStorage.GetTableStorageItemsFromStorage(tableStorageConfig, tableStorageConfig.TableChangeFailureRate, PartitionKeys.CreateBuildWorkflowPartitionKey(organization_owner, project_repo, buildName_workflowName));
                 List<ChangeFailureRateBuild> initialBuilds = JsonConvert.DeserializeObject<List<ChangeFailureRateBuild>>(list.ToString());
 
-                //Build the date list and then generate the change failure rate metric
-                List<ChangeFailureRateBuild> builds = new();
-                List<KeyValuePair<DateTime, bool>> dateList = new();
-                float maxBuildDuration = 0f;
+                // Pre-calculate cutoff date and check platform once
+                DateTime cutoffDate = DateTime.Now.AddDays(-numberOfDays);
+                bool isAzureDevOps = targetDevOpsPlatform == DevOpsPlatform.AzureDevOps;
+                
+                // Build the filtered list and date list in a single pass
+                List<ChangeFailureRateBuild> builds = new(initialBuilds.Count);
+                List<KeyValuePair<DateTime, bool>> dateList = new(initialBuilds.Count);
+                
                 foreach (ChangeFailureRateBuild item in initialBuilds)
                 {
-                    if (item.Branch == branch && item.StartTime > DateTime.Now.AddDays(-numberOfDays))
+                    if (item.Branch == branch && item.StartTime > cutoffDate)
                     {
-                        //Special branch for Azure DevOps to construct the Url to each build
-                        if (targetDevOpsPlatform == DevOpsPlatform.AzureDevOps)
+                        // Construct URL for Azure DevOps
+                        if (isAzureDevOps)
                         {
                             item.Url = $"https://dev.azure.com/{organization_owner}/{project_repo}/_build/results?buildId={item.Id}&view=results";
                         }
                         builds.Add(item);
+                        dateList.Add(new KeyValuePair<DateTime, bool>(item.StartTime, item.DeploymentWasSuccessful));
                     }
                 }
 
-                //then build the calcuation
-                foreach (ChangeFailureRateBuild item in builds)
-                {
-                    KeyValuePair<DateTime, bool> newItem = new(item.StartTime, item.DeploymentWasSuccessful);
-                    dateList.Add(newItem);
-                }
-                //calculate the metric on all of the results
+                // Calculate the metric on all of the results
                 float changeFailureRateMetric = changeFailureRate.ProcessChangeFailureRate(dateList, numberOfDays);
 
-                //Filter the results to return the last n (maxNumberOfItems)
+                // Filter the results to return the last n (maxNumberOfItems) and find max build duration in one pass
                 List<ChangeFailureRateBuild> uiBuilds = utility.GetLastNItems(builds, maxNumberOfItems);
+                float maxBuildDuration = 0f;
                 foreach (ChangeFailureRateBuild item in uiBuilds)
                 {
                     if (item.BuildDuration > maxBuildDuration)
@@ -60,11 +60,15 @@ namespace DevOpsMetrics.Core.DataAccess
                         maxBuildDuration = item.BuildDuration;
                     }
                 }
-                //We need to do some post processing and loop over the list a couple times to find the max build duration, construct a usable url, and calculate a build duration percentage
-                foreach (ChangeFailureRateBuild item in uiBuilds)
+                
+                // Calculate build duration percentages
+                if (maxBuildDuration > 0f)
                 {
-                    float interiumResult = ((item.BuildDuration / maxBuildDuration) * 100f);
-                    item.BuildDurationPercent = Scaling.ScaleNumberToRange(interiumResult, 0, 100, 20, 100);
+                    foreach (ChangeFailureRateBuild item in uiBuilds)
+                    {
+                        float interiumResult = (item.BuildDuration / maxBuildDuration) * 100f;
+                        item.BuildDurationPercent = Scaling.ScaleNumberToRange(interiumResult, 0, 100, 20, 100);
+                    }
                 }
 
                 ChangeFailureRateModel model = new()
@@ -109,19 +113,20 @@ namespace DevOpsMetrics.Core.DataAccess
             JArray list = await daTableStorage.GetTableStorageItemsFromStorage(tableStorageConfig, tableStorageConfig.TableChangeFailureRate, partitionKey);
             List<ChangeFailureRateBuild> initialBuilds = JsonConvert.DeserializeObject<List<ChangeFailureRateBuild>>(list.ToString());
 
-            //Get the list of items we are going to process, within the date/day range
-            List<ChangeFailureRateBuild> builds = new();
+            // Pre-calculate cutoff date
+            DateTime cutoffDate = DateTime.Now.AddDays(-numberOfDays);
+            
+            // Get the list of items we are going to process, within the date/day range
+            List<ChangeFailureRateBuild> builds = new(initialBuilds.Count);
             foreach (ChangeFailureRateBuild item in initialBuilds)
             {
-                if (item.StartTime > DateTime.Now.AddDays(-numberOfDays))
+                if (item.StartTime > cutoffDate)
                 {
                     builds.Add(item);
                 }
             }
 
-            Tuple<List<ChangeFailureRateBuild>, List<ChangeFailureRateBuild>> positiveAndNegativeBuilds = GetPositiveAndNegativeLists(percentComplete, builds);
-            List<ChangeFailureRateBuild> positiveBuilds = positiveAndNegativeBuilds.Item1;
-            List<ChangeFailureRateBuild> negativeBuilds = positiveAndNegativeBuilds.Item2;
+            (List<ChangeFailureRateBuild> positiveBuilds, List<ChangeFailureRateBuild> negativeBuilds) = GetPositiveAndNegativeLists(percentComplete, builds);
 
             //Make the updates
             TableStorageCommonDA tableChangeFailureRateDA = new(tableStorageConfig.StorageAccountConnectionString, tableStorageConfig.TableChangeFailureRate);
@@ -139,27 +144,29 @@ namespace DevOpsMetrics.Core.DataAccess
             return true;
         }
 
-        public static Tuple<List<ChangeFailureRateBuild>, List<ChangeFailureRateBuild>> GetPositiveAndNegativeLists(int percent, List<ChangeFailureRateBuild> builds)
+        public static (List<ChangeFailureRateBuild>, List<ChangeFailureRateBuild>) GetPositiveAndNegativeLists(int percent, List<ChangeFailureRateBuild> builds)
         {
-            //Prepare two lists, one with positive items we will eventually set to true
-            List<ChangeFailureRateBuild> positiveBuilds = new();
-            //The other negative items we will eventually set to false
-            List<ChangeFailureRateBuild> negativeBuilds = new();
-
-            //Find the midpoint in the list based on the percent
+            // Find the midpoint in the list based on the percent
             int midPoint = (int)(((double)percent / 100) * builds.Count);
-            //Get all items before the mid point for the positives
-            for (int i = 1; i <= midPoint; i++)
+            
+            // Prepare two lists with estimated capacity
+            List<ChangeFailureRateBuild> positiveBuilds = new(midPoint);
+            List<ChangeFailureRateBuild> negativeBuilds = new(builds.Count - midPoint);
+
+            // Split the list in a single pass
+            for (int i = 0; i < builds.Count; i++)
             {
-                positiveBuilds.Add(builds[i - 1]);
-            }
-            //Get all items after the mid point for the negatives
-            for (int i = midPoint + 1; i <= builds.Count; i++)
-            {
-                negativeBuilds.Add(builds[i - 1]);
+                if (i < midPoint)
+                {
+                    positiveBuilds.Add(builds[i]);
+                }
+                else
+                {
+                    negativeBuilds.Add(builds[i]);
+                }
             }
 
-            return new Tuple<List<ChangeFailureRateBuild>, List<ChangeFailureRateBuild>>(positiveBuilds, negativeBuilds);
+            return (positiveBuilds, negativeBuilds);
         }
 
         public static IEnumerable<IEnumerable<ChangeFailureRateBuild>> Partition(IEnumerable<ChangeFailureRateBuild> items, int partitionSize)

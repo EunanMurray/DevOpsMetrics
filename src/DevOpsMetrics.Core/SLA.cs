@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace DevOpsMetrics.Core
 {
@@ -9,62 +8,38 @@ namespace DevOpsMetrics.Core
     /// </summary>
     public class SLA
     {
-        private readonly List<KeyValuePair<DateTime, TimeSpan>> SLAList;
-
-        public SLA()
+        public float ProcessSLA(List<KeyValuePair<DateTime, TimeSpan>> slaList, int numberOfDays)
         {
-            SLAList = new();
-        }
-
-        public float ProcessSLA(List<KeyValuePair<DateTime, TimeSpan>> SLAList, int numberOfDays)
-        {
-            if (SLAList != null)
-            {
-                foreach (KeyValuePair<DateTime, TimeSpan> item in SLAList)
-                {
-                    AddSLA(item.Key, item.Value);
-                }
-            }
-            return CalculateSLA(numberOfDays);
-        }
-
-        private bool AddSLA(DateTime eventDateTime, TimeSpan restoreDuration)
-        {
-            SLAList.Add(new KeyValuePair<DateTime, TimeSpan>(eventDateTime, restoreDuration));
-            return true;
-        }
-
-        private float CalculateSLA(int numberOfDays)
-        {
-            List<KeyValuePair<DateTime, TimeSpan>> items = GetSLA(numberOfDays);
-
-            if (items.Count > 0)
-            {
-                //Total number of hours, in the number of days
-                int totalNumberOfHours = numberOfDays * 24;
-
-                //Count up the total MTTR hours (this is our outage time)
-                double totalHoursOutage = 0;
-                foreach (KeyValuePair<DateTime, TimeSpan> item in items)
-                {
-                    totalHoursOutage += item.Value.TotalHours;
-                }
-
-                //Calculate the SLA
-                float sla = (float)(totalNumberOfHours - totalHoursOutage) / (float)totalNumberOfHours;
-
-                return sla;
-            }
-            else
+            if (slaList == null || slaList.Count == 0)
             {
                 return -1;
             }
-        }
 
-        //Filter the list by date
-        private List<KeyValuePair<DateTime, TimeSpan>> GetSLA(int numberOfDays)
-        {
-            return SLAList.Where(x => x.Key > DateTime.Now.AddDays(-numberOfDays)).ToList();
+            // Filter by date and calculate total outage hours in a single pass
+            DateTime cutoffDate = DateTime.Now.AddDays(-numberOfDays);
+            double totalHoursOutage = 0;
+            int count = 0;
+
+            foreach (KeyValuePair<DateTime, TimeSpan> item in slaList)
+            {
+                if (item.Key > cutoffDate)
+                {
+                    totalHoursOutage += item.Value.TotalHours;
+                    count++;
+                }
+            }
+
+            if (count == 0)
+            {
+                return -1;
+            }
+
+            // Total number of hours in the number of days
+            int totalNumberOfHours = numberOfDays * 24;
+
+            // Calculate the SLA
+            float sla = (float)(totalNumberOfHours - totalHoursOutage) / totalNumberOfHours;
+            return sla;
         }
 
         public static string GetSLARating(float SLAPercent)

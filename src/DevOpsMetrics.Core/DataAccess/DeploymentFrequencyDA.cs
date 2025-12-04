@@ -22,47 +22,44 @@ namespace DevOpsMetrics.Core.DataAccess
                 List<AzureDevOpsBuild> azureDevOpsBuilds = await BuildsDA.GetAzureDevOpsBuilds(patToken, tableStorageConfig, organization, project, buildName, useCache);
                 if (azureDevOpsBuilds != null)
                 {
-                    //Translate the Azure DevOps build to a generic build object
-                    List<Build> builds = new();
+                    // Pre-calculate cutoff date
+                    DateTime cutoffDate = DateTime.Now.AddDays(-numberOfDays);
+                    
+                    // Translate and filter in a single pass, building both lists simultaneously
+                    List<Build> builds = new(azureDevOpsBuilds.Count);
+                    List<KeyValuePair<DateTime, DateTime>> dateList = new(azureDevOpsBuilds.Count);
+                    
                     foreach (AzureDevOpsBuild item in azureDevOpsBuilds)
                     {
-                        //Only return completed builds on the target branch, within the targeted date range
-                        if (item.status == "completed" && item.sourceBranch == branch && item.queueTime > DateTime.Now.AddDays(-numberOfDays))
+                        // Only return completed builds on the target branch, within the targeted date range
+                        if (item.status == "completed" && item.sourceBranch == branch && item.queueTime > cutoffDate)
                         {
-                            builds.Add(
-                                new Build
-                                {
-                                    Id = item.id,
-                                    Branch = item.sourceBranch,
-                                    BuildNumber = item.buildNumber,
-                                    StartTime = item.queueTime,
-                                    EndTime = item.finishTime,
-                                    BuildDurationPercent = item.buildDurationPercent,
-                                    Status = item.status,
-                                    Url = item.url
-                                }
-                            );
+                            Build build = new()
+                            {
+                                Id = item.id,
+                                Branch = item.sourceBranch,
+                                BuildNumber = item.buildNumber,
+                                StartTime = item.queueTime,
+                                EndTime = item.finishTime,
+                                BuildDurationPercent = item.buildDurationPercent,
+                                Status = item.status,
+                                Url = item.url
+                            };
+                            builds.Add(build);
+                            dateList.Add(new KeyValuePair<DateTime, DateTime>(item.queueTime, item.finishTime));
                         }
                     }
 
-                    //Get the total builds used in the calculation
+                    // Get the total builds used in the calculation
                     int buildTotal = builds.Count;
 
-                    //then build the calcuation, loading the dates into a date array
-                    List<KeyValuePair<DateTime, DateTime>> dateList = new();
-                    foreach (Build item in builds)
-                    {
-                        KeyValuePair<DateTime, DateTime> newItem = new(item.StartTime, item.EndTime);
-                        dateList.Add(newItem);
-                    }
+                    // Calculate the deployment frequency
+                    float deploymentsPerDay = deploymentFrequency.ProcessDeploymentFrequency(dateList, numberOfDays);
 
-                    //then build the calcuation, loading the dates into a date array
-                    float deploymentsPerDay;
-                    deploymentsPerDay = deploymentFrequency.ProcessDeploymentFrequency(dateList, numberOfDays);
-
-                    //Filter the results to return the last n (maxNumberOfItems), to return to the UI
+                    // Filter the results to return the last n (maxNumberOfItems), to return to the UI
                     builds = utility.GetLastNItems(builds, maxNumberOfItems);
-                    //Find the max build duration
+                    
+                    // Find the max build duration and calculate percent scaling in two passes over smaller list
                     float maxBuildDuration = 0f;
                     foreach (Build item in builds)
                     {
@@ -71,14 +68,18 @@ namespace DevOpsMetrics.Core.DataAccess
                             maxBuildDuration = item.BuildDuration;
                         }
                     }
-                    //Calculate the percent scaling
-                    foreach (Build item in builds)
+                    
+                    // Calculate the percent scaling
+                    if (maxBuildDuration > 0f)
                     {
-                        float interiumResult = ((item.BuildDuration / maxBuildDuration) * 100f);
-                        item.BuildDurationPercent = Scaling.ScaleNumberToRange(interiumResult, 0, 100, 20, 100);
+                        foreach (Build item in builds)
+                        {
+                            float interiumResult = (item.BuildDuration / maxBuildDuration) * 100f;
+                            item.BuildDurationPercent = Scaling.ScaleNumberToRange(interiumResult, 0, 100, 20, 100);
+                        }
                     }
 
-                    //Return the completed model
+                    // Return the completed model
                     DeploymentFrequencyModel model = new()
                     {
                         TargetDevOpsPlatform = DevOpsPlatform.AzureDevOps,
@@ -128,46 +129,43 @@ namespace DevOpsMetrics.Core.DataAccess
                 List<GitHubActionsRun> gitHubRuns = await BuildsDA.GetGitHubActionRuns(clientId, clientSecret, tableStorageConfig, owner, repo, workflowName, workflowId, useCache);
                 if (gitHubRuns != null)
                 {
-                    //Translate the GitHub build to a generic build object
-                    List<Build> builds = new();
+                    // Pre-calculate cutoff date
+                    DateTime cutoffDate = DateTime.Now.AddDays(-numberOfDays);
+                    
+                    // Translate and filter in a single pass, building both lists simultaneously
+                    List<Build> builds = new(gitHubRuns.Count);
+                    List<KeyValuePair<DateTime, DateTime>> dateList = new(gitHubRuns.Count);
+                    
                     foreach (GitHubActionsRun item in gitHubRuns)
                     {
                         //Only return completed builds on the target branch, within the targeted date range
-                        if (item.status == "completed" && item.head_branch == branch && item.created_at > DateTime.Now.AddDays(-numberOfDays))
+                        if (item.status == "completed" && item.head_branch == branch && item.created_at > cutoffDate)
                         {
-                            builds.Add(
-                                new Build
-                                {
-                                    Id = item.run_number,
-                                    Branch = item.head_branch,
-                                    BuildNumber = item.run_number,
-                                    StartTime = item.created_at,
-                                    EndTime = item.updated_at,
-                                    BuildDurationPercent = item.buildDurationPercent,
-                                    Status = item.status,
-                                    Url = item.html_url
-                                }
-                            );
+                            Build build = new()
+                            {
+                                Id = item.run_number,
+                                Branch = item.head_branch,
+                                BuildNumber = item.run_number,
+                                StartTime = item.created_at,
+                                EndTime = item.updated_at,
+                                BuildDurationPercent = item.buildDurationPercent,
+                                Status = item.status,
+                                Url = item.html_url
+                            };
+                            builds.Add(build);
+                            dateList.Add(new KeyValuePair<DateTime, DateTime>(item.created_at, item.updated_at));
                         }
                     }
 
                     //Get the total builds used in the calculation
                     int buildTotal = builds.Count;
 
-                    //then build the calcuation, loading the dates into a date array
-                    List<KeyValuePair<DateTime, DateTime>> dateList = new();
-                    foreach (Build item in builds)
-                    {
-                        KeyValuePair<DateTime, DateTime> newItem = new(item.StartTime, item.EndTime);
-                        dateList.Add(newItem);
-                    }
-
-                    //then build the calcuation, loading the dates into a date array
-                    float deploymentsPerDay;
-                    deploymentsPerDay = deploymentFrequency.ProcessDeploymentFrequency(dateList, numberOfDays);
+                    //Calculate the deployment frequency
+                    float deploymentsPerDay = deploymentFrequency.ProcessDeploymentFrequency(dateList, numberOfDays);
 
                     //Filter the results to return the last n (maxNumberOfItems), to return to the UI
                     builds = utility.GetLastNItems(builds, maxNumberOfItems);
+                    
                     //Find the max build duration
                     float maxBuildDuration = 0f;
                     foreach (Build item in builds)
@@ -177,11 +175,15 @@ namespace DevOpsMetrics.Core.DataAccess
                             maxBuildDuration = item.BuildDuration;
                         }
                     }
+                    
                     //Calculate the percent scaling
-                    foreach (Build item in builds)
+                    if (maxBuildDuration > 0f)
                     {
-                        float interiumResult = ((item.BuildDuration / maxBuildDuration) * 100f);
-                        item.BuildDurationPercent = Scaling.ScaleNumberToRange(interiumResult, 0, 100, 20, 100);
+                        foreach (Build item in builds)
+                        {
+                            float interiumResult = (item.BuildDuration / maxBuildDuration) * 100f;
+                            item.BuildDurationPercent = Scaling.ScaleNumberToRange(interiumResult, 0, 100, 20, 100);
+                        }
                     }
 
                     //Return the completed model

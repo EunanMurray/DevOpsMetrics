@@ -21,9 +21,7 @@ namespace DevOpsMetrics.Tests.Core
             List<ChangeFailureRateBuild> builds = GenerateSamples(samples);
 
             //Act
-            Tuple<List<ChangeFailureRateBuild>, List<ChangeFailureRateBuild>> positiveAndNegativeBuilds = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
-            List<ChangeFailureRateBuild> positiveBuilds = positiveAndNegativeBuilds.Item1;
-            List<ChangeFailureRateBuild> negativeBuilds = positiveAndNegativeBuilds.Item2;
+            (List<ChangeFailureRateBuild> positiveBuilds, List<ChangeFailureRateBuild> negativeBuilds) = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
 
             //Assert
             Assert.AreEqual(0, positiveBuilds.Count);
@@ -40,9 +38,7 @@ namespace DevOpsMetrics.Tests.Core
             List<ChangeFailureRateBuild> builds = GenerateSamples(samples);
 
             //Act
-            Tuple<List<ChangeFailureRateBuild>, List<ChangeFailureRateBuild>> positiveAndNegativeBuilds = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
-            List<ChangeFailureRateBuild> positiveBuilds = positiveAndNegativeBuilds.Item1;
-            List<ChangeFailureRateBuild> negativeBuilds = positiveAndNegativeBuilds.Item2;
+            (List<ChangeFailureRateBuild> positiveBuilds, List<ChangeFailureRateBuild> negativeBuilds) = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
 
             //Assert
             Assert.AreEqual(10, positiveBuilds.Count);
@@ -59,9 +55,7 @@ namespace DevOpsMetrics.Tests.Core
             List<ChangeFailureRateBuild> builds = GenerateSamples(samples);
 
             //Act
-            Tuple<List<ChangeFailureRateBuild>, List<ChangeFailureRateBuild>> positiveAndNegativeBuilds = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
-            List<ChangeFailureRateBuild> positiveBuilds = positiveAndNegativeBuilds.Item1;
-            List<ChangeFailureRateBuild> negativeBuilds = positiveAndNegativeBuilds.Item2;
+            (List<ChangeFailureRateBuild> positiveBuilds, List<ChangeFailureRateBuild> negativeBuilds) = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
 
             //Assert
             Assert.AreEqual(25, positiveBuilds.Count);
@@ -77,9 +71,7 @@ namespace DevOpsMetrics.Tests.Core
             List<ChangeFailureRateBuild> builds = GenerateSamples(samples);
 
             //Act
-            Tuple<List<ChangeFailureRateBuild>, List<ChangeFailureRateBuild>> positiveAndNegativeBuilds = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
-            List<ChangeFailureRateBuild> positiveBuilds = positiveAndNegativeBuilds.Item1;
-            List<ChangeFailureRateBuild> negativeBuilds = positiveAndNegativeBuilds.Item2;
+            (List<ChangeFailureRateBuild> positiveBuilds, List<ChangeFailureRateBuild> negativeBuilds) = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
 
             //Assert
             Assert.AreEqual(50, positiveBuilds.Count);
@@ -95,9 +87,7 @@ namespace DevOpsMetrics.Tests.Core
             List<ChangeFailureRateBuild> builds = GenerateSamples(samples);
 
             //Act
-            Tuple<List<ChangeFailureRateBuild>, List<ChangeFailureRateBuild>> positiveAndNegativeBuilds = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
-            List<ChangeFailureRateBuild> positiveBuilds = positiveAndNegativeBuilds.Item1;
-            List<ChangeFailureRateBuild> negativeBuilds = positiveAndNegativeBuilds.Item2;
+            (List<ChangeFailureRateBuild> positiveBuilds, List<ChangeFailureRateBuild> negativeBuilds) = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
 
             //Assert
             Assert.AreEqual(75, positiveBuilds.Count);
@@ -113,9 +103,7 @@ namespace DevOpsMetrics.Tests.Core
             List<ChangeFailureRateBuild> builds = GenerateSamples(samples);
 
             //Act
-            Tuple<List<ChangeFailureRateBuild>, List<ChangeFailureRateBuild>> positiveAndNegativeBuilds = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
-            List<ChangeFailureRateBuild> positiveBuilds = positiveAndNegativeBuilds.Item1;
-            List<ChangeFailureRateBuild> negativeBuilds = positiveAndNegativeBuilds.Item2;
+            (List<ChangeFailureRateBuild> positiveBuilds, List<ChangeFailureRateBuild> negativeBuilds) = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
 
             //Assert
             Assert.AreEqual(98, positiveBuilds.Count);
@@ -131,9 +119,7 @@ namespace DevOpsMetrics.Tests.Core
             List<ChangeFailureRateBuild> builds = GenerateSamples(samples);
 
             //Act
-            Tuple<List<ChangeFailureRateBuild>, List<ChangeFailureRateBuild>> positiveAndNegativeBuilds = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
-            List<ChangeFailureRateBuild> positiveBuilds = positiveAndNegativeBuilds.Item1;
-            List<ChangeFailureRateBuild> negativeBuilds = positiveAndNegativeBuilds.Item2;
+            (List<ChangeFailureRateBuild> positiveBuilds, List<ChangeFailureRateBuild> negativeBuilds) = ChangeFailureRateDA.GetPositiveAndNegativeLists(percent, builds);
 
             //Assert
             Assert.AreEqual(100, positiveBuilds.Count);
