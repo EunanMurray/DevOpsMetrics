@@ -183,7 +183,7 @@ namespace DevOpsMetrics.Core.DataAccess
             List<KeyValuePair<DateTime, TimeSpan>> dateList = new(events.Count);
             foreach (MeanTimeToRestoreEvent item in events)
             {
-                if (item.Status == "completed" || item.Status == "Completed")
+                if (string.Equals(item.Status, "completed", StringComparison.OrdinalIgnoreCase))
                 {
                     dateList.Add(new KeyValuePair<DateTime, TimeSpan>(item.StartTime, item.EndTime - item.StartTime));
                 }
