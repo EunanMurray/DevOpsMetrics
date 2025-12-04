@@ -21,15 +21,14 @@ namespace DevOpsMetrics.Core.DataAccess
             if (getSampleData == false)
             {
                 //If the user didn't specify a resource group, it comes in as null and causes havoc. Setting it as "" helps, it 
-                if (resourceGroup == null)
-                {
-                    resourceGroup = "";
-                }
+                resourceGroup ??= "";
 
                 //Pull the events from the table storage
                 AzureTableStorageDA daTableStorage = new();
                 JArray list = await daTableStorage.GetTableStorageItemsFromStorage(tableStorageConfig, tableStorageConfig.TableMTTR, resourceGroup);
-                List<AzureAlert> alerts = new();
+                
+                // Pre-allocate lists with estimated capacity
+                List<AzureAlert> alerts = new(list.Count);
                 foreach (JToken item in list)
                 {
                     alerts.Add(
@@ -43,17 +42,32 @@ namespace DevOpsMetrics.Core.DataAccess
                         });
                 }
                 //sort the events by timestamp
-                alerts = alerts.OrderBy(o => o.timestamp).ToList();
+                alerts.Sort((a, b) => a.timestamp.CompareTo(b.timestamp));
 
-                //Compile the events,  looking for pairs, using the ordered data, and name, resource group name and resource name
-                List<MeanTimeToRestoreEvent> events = new();
+                // Pre-calculate cutoff date
+                DateTime cutoffDate = DateTime.Now.AddDays(-numberOfDays);
+                
+                // Separate activated and deactivated alerts in a single pass
+                List<AzureAlert> startingAlerts = new(alerts.Count / 2);
+                List<AzureAlert> endingAlerts = new(alerts.Count / 2);
+                foreach (AzureAlert alert in alerts)
+                {
+                    if (alert.status == "Activated")
+                    {
+                        startingAlerts.Add(alert);
+                    }
+                    else if (alert.status == "Deactivated")
+                    {
+                        endingAlerts.Add(alert);
+                    }
+                }
 
-                //Loop through first finding the activated alerts
+                //Loop through first finding the activated alerts within date range
+                List<MeanTimeToRestoreEvent> events = new(startingAlerts.Count);
                 int i = 0;
-                List<AzureAlert> startingAlerts = alerts.Where(o => o.status == "Activated").ToList();
                 foreach (AzureAlert item in startingAlerts)
                 {
-                    if (item.timestamp > DateTime.Now.AddDays(-numberOfDays))
+                    if (item.timestamp > cutoffDate)
                     {
                         i++;
                         MeanTimeToRestoreEvent newEvent = new()
@@ -71,12 +85,11 @@ namespace DevOpsMetrics.Core.DataAccess
 
                 //Now loop through again, looking for the deactivated matching pair
                 float maxEventDuration = 0;
-                List<AzureAlert> endingAlerts = alerts.Where(o => o.status == "Deactivated").ToList();
                 foreach (MeanTimeToRestoreEvent item in events)
                 {
                     //Search for the next matching deactivated alert
                     int foundItemIndex = -1;
-                    for (int j = 0; j <= endingAlerts.Count - 1; j++)
+                    for (int j = 0; j < endingAlerts.Count; j++)
                     {
                         if (endingAlerts[j].name == item.Name
                             && endingAlerts[j].resourceName == item.Resource
@@ -111,13 +124,16 @@ namespace DevOpsMetrics.Core.DataAccess
 
                 //Filter the list for the UI, and sort the final list (May not be needed due to the initial sort on the starting alerts)
                 List<MeanTimeToRestoreEvent> uiEvents = utility.GetLastNItems(events, maxNumberOfItems);
-                uiEvents = uiEvents.OrderBy(o => o.StartTime).ToList();
+                uiEvents.Sort((a, b) => a.StartTime.CompareTo(b.StartTime));
 
                 //Finally, process the percent calculation
-                foreach (MeanTimeToRestoreEvent item in uiEvents)
+                if (maxEventDuration > 0)
                 {
-                    float interiumResult = ((item.MTTRDurationInHours / maxEventDuration) * 100f);
-                    item.MTTRDurationPercent = Scaling.ScaleNumberToRange(interiumResult, 0, 100, 20, 100);
+                    foreach (MeanTimeToRestoreEvent item in uiEvents)
+                    {
+                        float interiumResult = (item.MTTRDurationInHours / maxEventDuration) * 100f;
+                        item.MTTRDurationPercent = Scaling.ScaleNumberToRange(interiumResult, 0, 100, 20, 100);
+                    }
                 }
 
                 //Pull together the results into a single model
@@ -164,16 +180,12 @@ namespace DevOpsMetrics.Core.DataAccess
 
         private static List<KeyValuePair<DateTime, TimeSpan>> ConvertEventsToDateList(List<MeanTimeToRestoreEvent> events)
         {
-            List<KeyValuePair<DateTime, TimeSpan>> dateList = new();
+            List<KeyValuePair<DateTime, TimeSpan>> dateList = new(events.Count);
             foreach (MeanTimeToRestoreEvent item in events)
             {
-                if (item.Status == "completed" || item.Status == "Completed")
+                if (string.Equals(item.Status, "completed", StringComparison.OrdinalIgnoreCase))
                 {
                     dateList.Add(new KeyValuePair<DateTime, TimeSpan>(item.StartTime, item.EndTime - item.StartTime));
-                }
-                else
-                {
-                    Console.Write("Unknown status: " + item.Status);
                 }
             }
 

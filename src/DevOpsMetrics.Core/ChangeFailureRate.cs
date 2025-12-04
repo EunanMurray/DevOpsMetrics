@@ -9,67 +9,37 @@ namespace DevOpsMetrics.Core
     /// </summary>
     public class ChangeFailureRate
     {
-        private readonly List<KeyValuePair<DateTime, bool>> ChangeFailureRateList;
-
-        public ChangeFailureRate()
-        {
-            ChangeFailureRateList = new List<KeyValuePair<DateTime, bool>>();
-        }
-
         public float ProcessChangeFailureRate(List<KeyValuePair<DateTime, bool>> changeFailureRateList, int numberOfDays)
         {
-            if (changeFailureRateList != null)
+            if (changeFailureRateList == null || changeFailureRateList.Count == 0)
             {
-                foreach (KeyValuePair<DateTime, bool> item in changeFailureRateList)
-                {
-                    AddChangeFailureRate(item.Key, item.Value);
-                }
+                return -1;
             }
-            return CalculateChangeFailureRate(numberOfDays);
-        }
 
-        private bool AddChangeFailureRate(DateTime eventDateTime, bool deploymentIsSuccessful)
-        {
-            ChangeFailureRateList.Add(new KeyValuePair<DateTime, bool>(eventDateTime, deploymentIsSuccessful));
-            return true;
-        }
+            // Filter by date and calculate failure rate in a single pass
+            DateTime cutoffDate = DateTime.Now.AddDays(-numberOfDays);
+            int totalCount = 0;
+            int failureCount = 0;
 
-        private float CalculateChangeFailureRate(int numberOfDays)
-        {
-            List<KeyValuePair<DateTime, bool>> items = GetChangeFailureRate(numberOfDays);
-
-            float changeFailureRate = 0;
-            if (items == null || items.Count == 0)
+            foreach (KeyValuePair<DateTime, bool> item in changeFailureRateList)
             {
-                changeFailureRate = -1;
-            }
-            else
-            {
-                //Count up all successful changes
-                int failureCount = 0;
-                foreach (KeyValuePair<DateTime, bool> item in items)
+                if (item.Key > cutoffDate)
                 {
-                    if (item.Value == false)
+                    totalCount++;
+                    if (!item.Value)
                     {
                         failureCount++;
                     }
                 }
-
-                //Calculate the change failure rate per day
-                if (items.Count > 0)
-                {
-                    changeFailureRate = (float)failureCount / (float)items.Count;
-                }
-                changeFailureRate = (float)Math.Round((double)changeFailureRate, 4);
             }
 
-            return changeFailureRate;
-        }
+            if (totalCount == 0)
+            {
+                return -1;
+            }
 
-        //Filter the list by date
-        private List<KeyValuePair<DateTime, bool>> GetChangeFailureRate(int numberOfDays)
-        {
-            return ChangeFailureRateList.Where(x => x.Key > DateTime.Now.AddDays(-numberOfDays)).ToList();
+            float changeFailureRate = (float)failureCount / totalCount;
+            return (float)Math.Round(changeFailureRate, 4);
         }
 
         public static string GetChangeFailureRateRating(float changeFailureRate)

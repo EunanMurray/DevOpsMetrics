@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace DevOpsMetrics.Core
 {
@@ -9,57 +8,34 @@ namespace DevOpsMetrics.Core
     /// </summary>
     public class LeadTimeForChanges
     {
-        private readonly List<KeyValuePair<DateTime, TimeSpan>> LeadTimeForChangesList;
-
-        public LeadTimeForChanges()
-        {
-            LeadTimeForChangesList = new();
-        }
-
         public float ProcessLeadTimeForChanges(List<KeyValuePair<DateTime, TimeSpan>> leadTimeForChangesList, int numberOfDays)
         {
-            if (leadTimeForChangesList != null)
+            if (leadTimeForChangesList == null || leadTimeForChangesList.Count == 0)
             {
-                foreach (KeyValuePair<DateTime, TimeSpan> item in leadTimeForChangesList)
+                return 0f;
+            }
+
+            // Filter by date and calculate total hours in a single pass
+            DateTime cutoffDate = DateTime.Now.AddDays(-numberOfDays);
+            double totalHours = 0;
+            int count = 0;
+
+            foreach (KeyValuePair<DateTime, TimeSpan> item in leadTimeForChangesList)
+            {
+                if (item.Key > cutoffDate)
                 {
-                    AddLeadTimeForChanges(item.Key, item.Value);
+                    totalHours += item.Value.TotalHours;
+                    count++;
                 }
             }
-            return CalculateLeadTimeForChanges(numberOfDays);
-        }
 
-        private bool AddLeadTimeForChanges(DateTime eventDateTime, TimeSpan leadTimeDuration)
-        {
-            LeadTimeForChangesList.Add(new KeyValuePair<DateTime, TimeSpan>(eventDateTime, leadTimeDuration));
-            return true;
-        }
-
-        private float CalculateLeadTimeForChanges(int numberOfDays)
-        {
-            List<KeyValuePair<DateTime, TimeSpan>> items = GetLeadTimeForChanges(numberOfDays);
-
-            //Add up the total hours
-            double totalHours = 0;
-            foreach (KeyValuePair<DateTime, TimeSpan> item in items)
+            if (count == 0)
             {
-                totalHours += item.Value.TotalHours;
-            }
-            //Calculate the lead time for changes per day
-            float leadTimeForChanges = 0;
-            if (items.Count > 0)
-            {
-                leadTimeForChanges = (float)totalHours / (float)items.Count;
+                return 0f;
             }
 
-            leadTimeForChanges = (float)Math.Round((double)leadTimeForChanges, 4);
-
-            return leadTimeForChanges;
-        }
-
-        //Filter the list by date
-        private List<KeyValuePair<DateTime, TimeSpan>> GetLeadTimeForChanges(int numberOfDays)
-        {
-            return LeadTimeForChangesList.Where(x => x.Key > DateTime.Now.AddDays(-numberOfDays)).ToList();
+            float leadTimeForChanges = (float)(totalHours / count);
+            return (float)Math.Round(leadTimeForChanges, 4);
         }
 
         public static string GetLeadTimeForChangesRating(float leadTimeForChangesInHours)

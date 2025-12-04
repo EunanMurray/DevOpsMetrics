@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace DevOpsMetrics.Core
 {
@@ -9,60 +8,38 @@ namespace DevOpsMetrics.Core
     /// </summary>
     public class DeploymentFrequency
     {
-        private List<KeyValuePair<DateTime, DateTime>> DeploymentFrequencyList;
-
-        public DeploymentFrequency()
-        {
-            DeploymentFrequencyList = new List<KeyValuePair<DateTime, DateTime>>();
-        }
-
         /// <summary>
-        /// Add and calculate a deployment frequency list to return the frequency of deployments
+        /// Calculate deployment frequency from a list of deployments
         /// </summary>
         /// <param name="deploymentFrequencyList"></param>
-        /// <param name="pipelineName"></param>
         /// <param name="numberOfDays"></param>
         /// <returns></returns>
         public float ProcessDeploymentFrequency(List<KeyValuePair<DateTime, DateTime>> deploymentFrequencyList, int numberOfDays)
         {
-            if (deploymentFrequencyList != null)
+            if (deploymentFrequencyList == null || numberOfDays <= 0)
             {
-                DeploymentFrequencyList = new List<KeyValuePair<DateTime, DateTime>>();
-                foreach (KeyValuePair<DateTime, DateTime> item in deploymentFrequencyList)
+                return 0f;
+            }
+
+            // Count items within date range in a single pass
+            DateTime cutoffDate = DateTime.Now.AddDays(-numberOfDays);
+            int count = 0;
+
+            foreach (KeyValuePair<DateTime, DateTime> item in deploymentFrequencyList)
+            {
+                if (item.Key > cutoffDate)
                 {
-                    AddDeploymentFrequency(item.Key, item.Value);
+                    count++;
                 }
             }
-            return CalculateDeploymentFrequency(numberOfDays);
-        }
 
-        private bool AddDeploymentFrequency(DateTime eventDateTime, DateTime deploymentDateTime)
-        {
-            DeploymentFrequencyList.Add(new KeyValuePair<DateTime, DateTime>(eventDateTime, deploymentDateTime));
-            return true;
-        }
-
-        private float CalculateDeploymentFrequency(int numberOfDays)
-        {
-            List<KeyValuePair<DateTime, DateTime>> items = GetDeploymentFrequency(numberOfDays);
-
-            //Calculate the deployments per day
-            float deploymentsPerDay = 0;
-
-            if (items.Count > 0 && numberOfDays > 0)
+            if (count == 0)
             {
-                deploymentsPerDay = (float)items.Count / (float)numberOfDays;
+                return 0f;
             }
 
-            deploymentsPerDay = (float)Math.Round((double)deploymentsPerDay, 4);
-
-            return deploymentsPerDay;
-        }
-
-        //Filter the list by date
-        private List<KeyValuePair<DateTime, DateTime>> GetDeploymentFrequency(int numberOfDays)
-        {
-            return DeploymentFrequencyList.Where(x => x.Key > DateTime.Now.AddDays(-numberOfDays)).ToList();
+            float deploymentsPerDay = (float)count / numberOfDays;
+            return (float)Math.Round(deploymentsPerDay, 4);
         }
 
         public static string GetDeploymentFrequencyRating(float deploymentsPerDay)
